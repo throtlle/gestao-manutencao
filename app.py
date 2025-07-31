@@ -2,7 +2,6 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from fpdf import FPDF
 import datetime
 
 # ================== CONFIG ==================
@@ -40,36 +39,34 @@ if "equipamentos" not in st.session_state:
 if "ordens" not in st.session_state:
     st.session_state.ordens = pd.DataFrame(columns=["ID", "Equipamento", "Descrição", "Status"])
 
-# ================== FUNÇÃO GERAR PDF ==================
-def gerar_pdf(equipamentos, ordens):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=16)
-    pdf.cell(200, 10, txt="Relatório de Manutenção", ln=True, align="C")
-    pdf.ln(10)
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt=f"Data de emissão: {datetime.date.today()}", ln=True, align="L")
-    pdf.ln(10)
-
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="Equipamentos", ln=True)
-    pdf.set_font("Arial", size=10)
-    for index, row in equipamentos.iterrows():
-        pdf.cell(0, 8, txt=f"{row['ID']} - {row['Nome']} ({row['Localização']})", ln=True)
-    pdf.ln(5)
-
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="Ordens de Manutenção", ln=True)
-    pdf.set_font("Arial", size=10)
-    for index, row in ordens.iterrows():
-        pdf.cell(0, 8, txt=f"{row['ID']} - {row['Equipamento']} - {row['Descrição']} - Status: {row['Status']}", ln=True)
-
-    buffer = BytesIO()
-    pdf.output(buffer)
-    return buffer.getvalue()
+# ================== FUNÇÃO GERAR RELATÓRIO HTML ==================
+def gerar_relatorio_html(equipamentos, ordens):
+    html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial; margin: 40px; }}
+            h1 {{ text-align: center; color: #4CAF50; }}
+            h2 {{ color: #333; }}
+            table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+            th {{ background-color: #f2f2f2; }}
+        </style>
+    </head>
+    <body>
+        <h1>Relatório de Manutenção</h1>
+        <p><b>Data de emissão:</b> {datetime.date.today()}</p>
+        <h2>Equipamentos</h2>
+        {equipamentos.to_html(index=False)}
+        <h2>Ordens de Manutenção</h2>
+        {ordens.to_html(index=False)}
+    </body>
+    </html>
+    """
+    return html
 
 # ================== SIDEBAR ==================
-menu = st.sidebar.radio("Menu", ["Dashboard", "Equipamentos", "Ordens de Manutenção", "Importar Planilha", "Exportar Dados", "Relatório PDF", "Sair"])
+menu = st.sidebar.radio("Menu", ["Dashboard", "Equipamentos", "Ordens de Manutenção", "Importar Planilha", "Exportar Dados", "Relatório HTML", "Sair"])
 
 # ================== DASHBOARD ==================
 if menu == "Dashboard":
@@ -129,12 +126,12 @@ elif menu == "Exportar Dados":
     st.download_button("Baixar Equipamentos (CSV)", csv_equip, "equipamentos.csv", "text/csv")
     st.download_button("Baixar Ordens (CSV)", csv_ordens, "ordens.csv", "text/csv")
 
-# ================== RELATÓRIO PDF ==================
-elif menu == "Relatório PDF":
-    st.title("Gerar Relatório PDF")
-    if st.button("Gerar PDF"):
-        pdf_bytes = gerar_pdf(st.session_state.equipamentos, st.session_state.ordens)
-        st.download_button("Baixar Relatório PDF", data=pdf_bytes, file_name="relatorio_manutencao.pdf", mime="application/pdf")
+# ================== RELATÓRIO HTML ==================
+elif menu == "Relatório HTML":
+    st.title("Gerar Relatório HTML (Salvar como PDF pelo navegador)")
+    html_content = gerar_relatorio_html(st.session_state.equipamentos, st.session_state.ordens)
+    st.download_button("Baixar Relatório HTML", data=html_content, file_name="relatorio.html", mime="text/html")
+    st.info("Abra o arquivo HTML baixado, pressione CTRL+P e escolha 'Salvar como PDF'.")
 
 # ================== SAIR ==================
 elif menu == "Sair":
