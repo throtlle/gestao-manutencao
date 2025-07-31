@@ -2,33 +2,101 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from fpdf import FPDF
+import datetime
 
-# Configuração da página
+# ================== CONFIG ==================
 st.set_page_config(page_title="Gestão de Manutenção", layout="wide")
+st.markdown(
+    """
+    <style>
+    .main {background-color: #f9f9f9;}
+    .stButton>button {background-color: #4CAF50; color:white; border-radius:8px; height:3em; width:100%;}
+    .stSidebar {background-color: #f1f3f6;}
+    </style>
+    """, unsafe_allow_html=True)
 
-# Inicializa bancos de dados em memória
+# ================== LOGIN ==================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+def login():
+    user = st.text_input("Usuário")
+    password = st.text_input("Senha", type="password")
+    if st.button("Entrar"):
+        if user == "admin" and password == "123":
+            st.session_state.logged_in = True
+        else:
+            st.error("Usuário ou senha incorretos!")
+
+if not st.session_state.logged_in:
+    st.title("🔐 Login do Sistema")
+    login()
+    st.stop()
+
+# ================== BANCO EM MEMÓRIA ==================
 if "equipamentos" not in st.session_state:
     st.session_state.equipamentos = pd.DataFrame(columns=["ID", "Nome", "Localização"])
 if "ordens" not in st.session_state:
     st.session_state.ordens = pd.DataFrame(columns=["ID", "Equipamento", "Descrição", "Status"])
 
-# Menu lateral
-menu = st.sidebar.radio("Menu", ["Equipamentos", "Ordens de Manutenção", "Relatórios", "Exportar Dados"])
+# ================== FUNÇÃO GERAR PDF ==================
+def gerar_pdf(equipamentos, ordens):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=16)
+    pdf.cell(200, 10, txt="Relatório de Manutenção", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Data de emissão: {datetime.date.today()}", ln=True, align="L")
+    pdf.ln(10)
 
-# Cadastro de equipamentos
-if menu == "Equipamentos":
-    st.header("Cadastro de Equipamentos")
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="Equipamentos", ln=True)
+    pdf.set_font("Arial", size=10)
+    for index, row in equipamentos.iterrows():
+        pdf.cell(0, 8, txt=f"{row['ID']} - {row['Nome']} ({row['Localização']})", ln=True)
+    pdf.ln(5)
+
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="Ordens de Manutenção", ln=True)
+    pdf.set_font("Arial", size=10)
+    for index, row in ordens.iterrows():
+        pdf.cell(0, 8, txt=f"{row['ID']} - {row['Equipamento']} - {row['Descrição']} - Status: {row['Status']}", ln=True)
+
+    buffer = BytesIO()
+    pdf.output(buffer)
+    return buffer.getvalue()
+
+# ================== SIDEBAR ==================
+menu = st.sidebar.radio("Menu", ["Dashboard", "Equipamentos", "Ordens de Manutenção", "Importar Planilha", "Exportar Dados", "Relatório PDF", "Sair"])
+
+# ================== DASHBOARD ==================
+if menu == "Dashboard":
+    st.title("📊 Painel de Controle")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total de Equipamentos", len(st.session_state.equipamentos))
+    col2.metric("Total de Ordens", len(st.session_state.ordens))
+    pendentes = len(st.session_state.ordens[st.session_state.ordens["Status"] == "Pendente"])
+    col3.metric("Ordens Pendentes", pendentes)
+    if len(st.session_state.ordens) > 0:
+        st.subheader("Distribuição de Ordens por Status")
+        st.bar_chart(st.session_state.ordens["Status"].value_counts())
+
+# ================== EQUIPAMENTOS ==================
+elif menu == "Equipamentos":
+    st.title("Cadastro de Equipamentos")
     nome = st.text_input("Nome do equipamento")
     local = st.text_input("Localização")
     if st.button("Adicionar equipamento"):
         novo_id = len(st.session_state.equipamentos) + 1
         st.session_state.equipamentos.loc[len(st.session_state.equipamentos)] = [novo_id, nome, local]
         st.success("Equipamento adicionado!")
-    st.dataframe(st.session_state.equipamentos)
+    st.dataframe(st.session_state.equipamentos, use_container_width=True)
 
-# Ordens de manutenção
+# ================== ORDENS ==================
 elif menu == "Ordens de Manutenção":
-    st.header("Registro de Ordens de Manutenção")
+    st.title("Registro de Ordens de Manutenção")
     if len(st.session_state.equipamentos) == 0:
         st.warning("Cadastre primeiro um equipamento!")
     else:
@@ -39,21 +107,36 @@ elif menu == "Ordens de Manutenção":
             st.session_state.ordens.loc[len(st.session_state.ordens)] = [novo_id, equipamento, descricao, "Pendente"]
             st.success("Ordem criada!")
     st.subheader("Ordens existentes")
-    st.dataframe(st.session_state.ordens)
+    st.dataframe(st.session_state.ordens, use_container_width=True)
 
-# Relatórios
-elif menu == "Relatórios":
-    st.header("Relatórios de Manutenção")
-    st.write(f"Total de equipamentos: {len(st.session_state.equipamentos)}")
-    st.write(f"Total de ordens: {len(st.session_state.ordens)}")
-    if len(st.session_state.ordens) > 0:
-        st.bar_chart(st.session_state.ordens["Status"].value_counts())
+# ================== IMPORTAÇÃO ==================
+elif menu == "Importar Planilha":
+    st.title("Importar Dados de Planilha")
+    arquivo = st.file_uploader("Selecione um arquivo Excel", type=["xls", "xlsx", "xlsm"])
+    if arquivo is not None:
+        df_importado = pd.read_excel(arquivo)
+        st.write("Pré-visualização dos dados importados:")
+        st.dataframe(df_importado.head(), use_container_width=True)
+        if st.button("Usar como base de equipamentos"):
+            st.session_state.equipamentos = df_importado.copy()
+            st.success("Dados de equipamentos carregados com sucesso!")
 
-# Exportação de dados
-else:
-    st.header("Exportar Dados")
-    with BytesIO() as buffer:
-        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            st.session_state.equipamentos.to_excel(writer, sheet_name="Equipamentos", index=False)
-            st.session_state.ordens.to_excel(writer, sheet_name="Ordens", index=False)
-        st.download_button("Baixar Excel", buffer.getvalue(), "dados_manutencao.xlsx")
+# ================== EXPORTAÇÃO CSV ==================
+elif menu == "Exportar Dados":
+    st.title("Exportar Dados")
+    csv_equip = st.session_state.equipamentos.to_csv(index=False).encode('utf-8')
+    csv_ordens = st.session_state.ordens.to_csv(index=False).encode('utf-8')
+    st.download_button("Baixar Equipamentos (CSV)", csv_equip, "equipamentos.csv", "text/csv")
+    st.download_button("Baixar Ordens (CSV)", csv_ordens, "ordens.csv", "text/csv")
+
+# ================== RELATÓRIO PDF ==================
+elif menu == "Relatório PDF":
+    st.title("Gerar Relatório PDF")
+    if st.button("Gerar PDF"):
+        pdf_bytes = gerar_pdf(st.session_state.equipamentos, st.session_state.ordens)
+        st.download_button("Baixar Relatório PDF", data=pdf_bytes, file_name="relatorio_manutencao.pdf", mime="application/pdf")
+
+# ================== SAIR ==================
+elif menu == "Sair":
+    st.session_state.logged_in = False
+    st.experimental_rerun()
