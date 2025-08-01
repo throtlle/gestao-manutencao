@@ -1,3 +1,4 @@
-simple-salesforce
+requests
+oauthlib
 pandas
 streamlit
