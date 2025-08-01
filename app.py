@@ -2,9 +2,10 @@
 import streamlit as st
 import pandas as pd
 import datetime
+from simple_salesforce import Salesforce, SalesforceAuthenticationFailed
 
 # ================== CONFIG ==================
-st.set_page_config(page_title="Gestão de Confiabilidade", layout="wide")
+st.set_page_config(page_title="Gestão de Confiabilidade + Salesforce", layout="wide")
 st.markdown(
     """
     <style>
@@ -82,9 +83,9 @@ def gerar_relatorio_html(linha):
     return html
 
 # ================== SIDEBAR ==================
-menu = st.sidebar.radio("Menu", ["Cadastro Equipamento","Registro Falha","Dashboard","Relatório Individual","Sair"])
+menu = st.sidebar.radio("Menu", ["Cadastro Equipamento","Registro Falha","Dashboard","Relatório Individual","Salesforce","Sair"])
 
-# ================== CADASTRO EQUIPAMENTO ==================
+# ================== CADASTRO ==================
 if menu == "Cadastro Equipamento":
     st.title("Cadastro de Equipamentos")
     nome = st.text_input("Nome do equipamento")
@@ -96,7 +97,7 @@ if menu == "Cadastro Equipamento":
             st.success("Equipamento cadastrado!")
     st.dataframe(st.session_state.equipamentos, use_container_width=True)
 
-# ================== REGISTRO FALHA ==================
+# ================== REGISTRO DE FALHA ==================
 elif menu == "Registro Falha":
     st.title("Registro de Falhas e Reparos")
     if len(st.session_state.equipamentos)==0:
@@ -138,6 +139,28 @@ elif menu == "Relatório Individual":
         html = gerar_relatorio_html(linha)
         st.download_button("Baixar Relatório HTML", data=html, file_name=f"relatorio_{equip}.html", mime="text/html")
         st.info("Abra o arquivo HTML baixado, pressione CTRL+P e escolha 'Salvar como PDF'.")
+
+# ================== SALESFORCE ==================
+elif menu == "Salesforce":
+    st.title("Integração com Salesforce")
+    usuario = st.text_input("Usuário Salesforce")
+    senha = st.text_input("Senha Salesforce", type="password")
+    token = st.text_input("Token de Segurança Salesforce", type="password")
+    if st.button("Conectar"):
+        try:
+            sf = Salesforce(username=usuario, password=senha, security_token=token)
+            st.success("Conexão bem-sucedida!")
+            if st.button("Buscar Ativos"):
+                ativos = sf.query("SELECT Id, Name FROM Asset")
+                df_ativos = pd.DataFrame(ativos['records']).drop(columns='attributes')
+                st.dataframe(df_ativos)
+            if st.button("Criar Ativo de Teste"):
+                result = sf.Asset.create({'Name': 'Ativo Teste API'})
+                st.success(f"Ativo criado com ID: {result['id']}")
+        except SalesforceAuthenticationFailed as e:
+            st.error(f"Erro de autenticação: {e}")
+        except Exception as e:
+            st.error(f"Ocorreu um erro: {e}")
 
 # ================== SAIR ==================
 elif menu == "Sair":
